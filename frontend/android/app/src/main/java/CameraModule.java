@@ -31,7 +31,6 @@ public class CameraModule extends ReactContextBaseJavaModule {
    @ReactMethod
     public void triggerNotification() {
 
-        // 🔥 CREATE CHANNEL (THIS WAS MISSING)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
                     "camera_channel",
