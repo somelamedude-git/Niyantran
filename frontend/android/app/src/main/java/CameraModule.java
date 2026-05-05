@@ -1,18 +1,24 @@
 package com.frontend;
 
-import android.app.PendingIntent;
-import android.content.Intent;
-
-import androidx.core.app.NotificationCompat;
-import androidx.core.app.NotificationManagerCompat;
+import androidx.work.PeriodicWorkRequest;
+import androidx.work.WorkManager;
+import androidx.work.ExistingPeriodicWorkPolicy;
 
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
 
+import java.util.concurrent.TimeUnit;
+
+import android.content.Context;
+import android.content.Intent;
+import android.app.PendingIntent;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.os.Build;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 
 public class CameraModule extends ReactContextBaseJavaModule {
 
@@ -28,8 +34,9 @@ public class CameraModule extends ReactContextBaseJavaModule {
         return "CameraModule";
     }
 
-   @ReactMethod
+    @ReactMethod
     public void triggerNotification() {
+        Context ctx = context;
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationChannel channel = new NotificationChannel(
@@ -39,30 +46,57 @@ public class CameraModule extends ReactContextBaseJavaModule {
             );
 
             NotificationManager manager =
-                    context.getSystemService(NotificationManager.class);
+                    ctx.getSystemService(NotificationManager.class);
 
             manager.createNotificationChannel(channel);
         }
 
-        Intent intent = new Intent(context, CameraActivity.class);
+        Intent intent = new Intent(ctx, CameraActivity.class);
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
 
         PendingIntent pendingIntent = PendingIntent.getActivity(
-                context,
+                ctx,
                 0,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
         NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(context, "camera_channel")
+                new NotificationCompat.Builder(ctx, "camera_channel")
                         .setSmallIcon(android.R.drawable.ic_menu_camera)
-                        .setContentTitle("TEST 🔥")
+                        .setContentTitle("TEST")
                         .setContentText("If you see this, it works")
                         .setPriority(NotificationCompat.PRIORITY_HIGH)
                         .setContentIntent(pendingIntent)
                         .setAutoCancel(true);
 
-        NotificationManagerCompat.from(context).notify(1, builder.build());
+        NotificationManagerCompat.from(ctx).notify(1, builder.build());
+    }
+
+    @ReactMethod
+    public void startPeriodicNotifications() {
+
+        PeriodicWorkRequest workRequest =
+            new PeriodicWorkRequest.Builder(
+                    NotificationWorker.class,
+                    15, TimeUnit.MINUTES
+            ).build();
+
+        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                "camera_notification",
+                ExistingPeriodicWorkPolicy.KEEP,
+                workRequest
+        );
+    }
+
+    @ReactMethod
+    public void startForegroundService() {
+        Intent intent = new Intent(context, ForegroundService.class);
+
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            context.startForegroundService(intent);
+        } else {
+            context.startService(intent);
+        }
     }
 }

@@ -36,13 +36,22 @@ const App = () => {
     }
   };
 
+  const startService = () => {
+    if (CameraModule?.startForegroundService) {
+      CameraModule.startForegroundService();
+    } else {
+      Alert.alert("Error", "Foreground service not available");
+    }
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <View>
-        <Text>Test Notification</Text>
+        <Text>Foreground Service Camera 🔥</Text>
+
         <Button
-          title="Trigger Camera Notification"
-          onPress={() => CameraModule.triggerNotification()}
+          title="Start Camera Notifications"
+          onPress={startService}
         />
       </View>
     </SafeAreaView>
