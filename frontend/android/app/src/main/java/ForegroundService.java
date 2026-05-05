@@ -23,7 +23,7 @@ public class ForegroundService extends Service {
         public void run() {
             sendNotification();
 
-            handler.postDelayed(this, 30 * 1000); // 15 min
+            handler.postDelayed(this, 2 * 60 * 60 * 1000);
         }
     };
 
@@ -34,7 +34,7 @@ public class ForegroundService extends Service {
 
         startForeground(1, getServiceNotification());
 
-        handler.post(task); // start loop
+        handler.post(task);
 
         return START_STICKY;
     }
