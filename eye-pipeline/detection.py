@@ -76,7 +76,7 @@ if __name__ == "__main__":
         
         cv2.imshow('Eye Tracker - Masked Mode', processed_frame)
         
-        if cv2.waitKey(5) & 0xFF == 27: # Esc key
+        if cv2.waitKey(5) & 0xFF == 27: 
             break
     
     tracker.close()
