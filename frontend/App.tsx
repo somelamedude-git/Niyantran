@@ -15,21 +15,30 @@ const { CameraModule } = NativeModules;
 const App = () => {
 
   useEffect(() => {
-    requestNotificationPermission();
+    requestPermissions();
   }, []);
 
-  const requestNotificationPermission = async () => {
+  const requestPermissions = async () => {
     if (Platform.OS !== 'android') return;
 
     try {
-      const result = await PermissionsAndroid.request(
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
-      );
+      const results = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      ]);
 
-      console.log("Notification permission:", result);
+      console.log("Permissions:", results);
 
-      if (result !== PermissionsAndroid.RESULTS.GRANTED) {
-        Alert.alert("Permission needed", "Enable notifications manually");
+      if (
+        results[PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS] !== PermissionsAndroid.RESULTS.GRANTED ||
+        results[PermissionsAndroid.PERMISSIONS.CAMERA] !== PermissionsAndroid.RESULTS.GRANTED ||
+        results[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] !== PermissionsAndroid.RESULTS.GRANTED
+      ) {
+        Alert.alert(
+          "Permissions needed",
+          "Please enable notifications, camera, and microphone permissions"
+        );
       }
     } catch (e) {
       console.log(e);
@@ -47,10 +56,10 @@ const App = () => {
   return (
     <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
       <View>
-        <Text>Foreground Service Camera 🔥</Text>
+        <Text>Foreground Video Recorder</Text>
 
         <Button
-          title="Start Camera Notifications"
+          title="Start Video Notifications"
           onPress={startService}
         />
       </View>
