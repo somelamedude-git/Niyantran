@@ -23,6 +23,12 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 
 	defer file.Close()
 
+	err = os.MkdirAll("./uploads", os.ModePerm)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	dst, err := os.Create("./uploads/" + handler.Filename)
 
 	if err != nil {
