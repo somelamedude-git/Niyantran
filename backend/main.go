@@ -17,6 +17,7 @@ func main() {
 	h := InitDB()
 
 	http.HandleFunc("/user/create", h.CreateUser)
+	http.HandleFunc("/user/result/create", h.ReceiveModelData)
 	
 	http.HandleFunc("/uploads", handlers.UploadFilesHandlers)
 	err = http.ListenAndServe(":8000", nil)
