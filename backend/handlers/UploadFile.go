@@ -1,9 +1,10 @@
 package handlers
 
 import (
+	"bytes"
 	"io"
+	"mime/multipart"
 	"net/http"
-	"os"
 	"time"
 )
 
@@ -24,23 +25,42 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 
 	defer file.Close()
 
-	err = os.MkdirAll("./uploads", os.ModePerm)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	var body bytes.Buffer
+	writer := multipart.NewWriter(&body)
 
 	t := time.Now()
-
 	str := t.Format("2006-01-02 15:04:05")
-
-	dst, err := os.Create("./uploads/" + str + "--" + handler.Filename)
-
+	part, err := writer.CreateFormFile("file", str + " -- " + handler.Filename)
 	if err != nil {
-		http.Error(w, "cannot save file", http.StatusInternalServerError)
+		http.Error(w, "Error creating form file", http.StatusInternalServerError)
 		return
 	}
-	defer dst.Close()
 
-	io.Copy(dst, file)
+	_, er := io.Copy(part, file)
+	if er != nil {
+		http.Error(w, "Error copying file", http.StatusInternalServerError)
+		return
+	}
+
+	writer.Close()
+
+	req, err := http.NewRequest("POST", "route", &body)
+	if err != nil {
+		http.Error(w, "Error creatig request", http.StatusInternalServerError)
+		return
+	}
+
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+
+	if err != nil {
+		http.Error(w, "Error forwarding file", http.StatusInternalServerError)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	io.Copy(w, resp.Body)
 }
