@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"time"
 )
 
 
@@ -29,7 +30,11 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	dst, err := os.Create("./uploads/" + handler.Filename)
+	t := time.Now()
+
+	str := t.Format("2006-01-02 15:04:05")
+
+	dst, err := os.Create("./uploads/" + str + "--" + handler.Filename)
 
 	if err != nil {
 		http.Error(w, "cannot save file", http.StatusInternalServerError)
