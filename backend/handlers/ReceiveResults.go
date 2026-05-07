@@ -4,6 +4,7 @@ import (
 	"Niyantran/models"
 	"encoding/json"
 	"net/http"
+	"time"
 )
 
 func (h *Handler) ReceiveModelData(w http.ResponseWriter, r *http.Request) {
@@ -13,9 +14,11 @@ func (h *Handler) ReceiveModelData(w http.ResponseWriter, r *http.Request) {
 	err := decoder.Decode(&result)
 
 	if err != nil {
-		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	result.Time = time.Now()
 	
 	_, err = h.DB.Exec(
 		"INSERT INTO results (userid, probability, time) VALUES ($1, $2, $3)",
