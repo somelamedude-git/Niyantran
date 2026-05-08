@@ -2,7 +2,6 @@ package main
 
 import (
 	"Niyantran/handlers"
-	"log"
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
@@ -10,17 +9,15 @@ import (
 )
 
 func main() {
-	err := godotenv.Load()
-	if err != nil {
-		log.Fatal("Error loading .env")
-	}
+	// Temporarily ignore .env and DB errors so the upload server can run!
+	godotenv.Load()
 
-	h := InitDB()
+	// h := InitDB()
 
 	r := gin.Default()
 	r.MaxMultipartMemory = 10 << 20
 
-	r.POST("/user/results/create", h.ReceiveModelData)
+	// r.POST("/user/results/create", h.ReceiveModelData)
 	r.POST("/uploads", handlers.UploadFilesHandlers)
 
 	r.Run(":8000")
