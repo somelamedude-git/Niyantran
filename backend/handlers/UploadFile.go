@@ -1,28 +1,30 @@
 package handlers
 
 import (
+	"Niyantran/utils"
 	"bytes"
+	"fmt"
 	"io"
 	"mime/multipart"
 	"net/http"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 
-func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
+func UploadFilesHandlers(c *gin.Context) {
 
-	err := r.ParseMultipartForm(10 << 20)
+	file, header, err := c.Request.FormFile("file")
 	if err != nil {
-		http.Error(w, "File too large", http.StatusBadRequest)
+		if err.Error() == "http: request body too large" {
+			utils.ErrorHandler(c, 413, "File too large", fmt.Sprintf("%v", err))
+			return
+		}
+
+		utils.ErrorHandler(c, 400, "Bad Request", fmt.Sprintf("%v", err))
 		return
 	}
-
-	file, handler, err := r.FormFile("file")
-	if err != nil {
-		http.Error(w, "Error raeding file", http.StatusBadRequest)
-		return
-	}
-
 	defer file.Close()
 
 	var body bytes.Buffer
@@ -30,15 +32,15 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 
 	t := time.Now()
 	str := t.Format("2006-01-02 15:04:05")
-	part, err := writer.CreateFormFile("file", str + " -- " + handler.Filename)
+	part, err := writer.CreateFormFile("file", str + " -- " + header.Filename)
 	if err != nil {
-		http.Error(w, "Error creating form file", http.StatusInternalServerError)
+		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
 		return
 	}
 
-	_, er := io.Copy(part, file)
-	if er != nil {
-		http.Error(w, "Error copying file", http.StatusInternalServerError)
+	_, err = io.Copy(part, file)
+	if err != nil {
+		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
 		return
 	}
 
@@ -46,7 +48,7 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 
 	req, err := http.NewRequest("POST", "route", &body)
 	if err != nil {
-		http.Error(w, "Error creatig request", http.StatusInternalServerError)
+		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
 		return
 	}
 
@@ -56,11 +58,21 @@ func UploadFilesHandlers(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Do(req)
 
 	if err != nil {
-		http.Error(w, "Error forwarding file", http.StatusInternalServerError)
+		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
 		return
 	}
 
 	defer resp.Body.Close()
 
-	io.Copy(w, resp.Body)
+	respData, err := io.ReadAll(resp.Body)
+	if err != nil {
+		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
+		return
+	}
+
+	c.JSON(200, gin.H{
+		"code" : 200,
+		"info" : string(respData), 
+	})
+	c.Abort()
 }

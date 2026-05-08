@@ -3,9 +3,10 @@ package main
 import (
 	"Niyantran/handlers"
 	"log"
-	"net/http"
-	_ "github.com/lib/pq"
+
+	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 )
 
 func main() {
@@ -16,12 +17,11 @@ func main() {
 
 	h := InitDB()
 
-	http.HandleFunc("/user/create", h.CreateUser)
-	http.HandleFunc("/user/result/create", h.ReceiveModelData)
-	
-	http.HandleFunc("/uploads", handlers.UploadFilesHandlers)
-	err = http.ListenAndServe(":8000", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	r := gin.Default()
+	r.MaxMultipartMemory = 10 << 20
+
+	r.POST("/user/results/create", h.ReceiveModelData)
+	r.POST("/uploads", handlers.UploadFilesHandlers)
+
+	r.Run(":8000")
 }
