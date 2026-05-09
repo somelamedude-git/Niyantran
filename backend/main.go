@@ -28,7 +28,7 @@ func main() {
 	r.POST("/login", h.Login)
 	r.POST("/users/create", h.CreateUser)
 	r.POST("/logout", auth.AuthMiddleware(redisClient),h.Logout)
-	r.POST("/refresh", auth.AuthMiddleware(redisClient), h.Refresh)
-	
+	r.POST("/refresh", h.Refresh)
+
 	r.Run(":8000")
 }

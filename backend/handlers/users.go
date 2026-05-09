@@ -5,6 +5,7 @@ import (
 	"Niyantran/models"
 	"Niyantran/utils"
 	"context"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -180,8 +181,10 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 	if err != nil {
 
+		fmt.Println("PARSE ERROR:", err)
+
 		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "invalid refresh token",
+			"error": err.Error(),
 		})
 
 		return
