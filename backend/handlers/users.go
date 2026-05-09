@@ -96,7 +96,7 @@ func (h *Handler) Login (c *gin.Context) {
 	})
 }
 
-func (h *Handler)logout (c *gin.Context) {
+func (h *Handler)Logout (c *gin.Context) {
 	type LogoutRequest struct {
 		RefreshToken string `json:"refresh_token"`
 	}
@@ -172,6 +172,7 @@ func (h *Handler) Refresh(c *gin.Context) {
 
 		return
 	}
+	
 
 	claims, err := auth.ParseRefresh(
 		req.RefreshToken,
