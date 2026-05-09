@@ -1,0 +1,29 @@
+package utils
+
+import (
+	"context"
+	"time"
+	"github.com/redis/go-redis/v9"
+)
+
+type Redis struct {
+	Client *redis.Client
+}
+
+func NewRedis() *Redis {
+	addr := "redis:6379"
+	rdb := redis.NewClient(&redis.Options{Addr: addr})
+	return &Redis{Client: rdb}
+}
+
+func (r *Redis) SetJTI (ctx context.Context, key,userId string, exp time.Time) error {
+	return r.Client.Set(ctx, key, userId, time.Until(exp)).Err()
+}
+
+func (r *Redis) DelJTI(ctx context.Context, key string) error {
+	return r.Client.Del(ctx, key).Err()
+}
+
+func (r *Redis) GetUserByJTI(ctx context.Context, key string) (string, error) {
+	return r.Client.Get(ctx, key).Result()
+}
