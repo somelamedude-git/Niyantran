@@ -24,7 +24,7 @@ class RatioCalculator:
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         result = self.detector.detect_for_video(mp_image, int(time.time()*100))
-        return result.face_landmark
+        return result.face_landmarks
     
     def get_left_eye_ratio(self, landmarks):
         upper = np.array([landmarks[159].x, landmarks[159].y])
@@ -50,4 +50,4 @@ class RatioCalculator:
 
         return vertical_dist/horizontal_dist
     
-    
+
