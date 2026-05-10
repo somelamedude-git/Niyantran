@@ -4,6 +4,7 @@ import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 import time
+from PyEMD import EMD
 
 class RatioCalculator:
     def __init__(self, model_path='face_landmarker.task'):
@@ -23,7 +24,7 @@ class RatioCalculator:
         h, w, _ = frame.shape
         rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
-        result = self.detector.detect_for_video(mp_image, int(time.time()*100))
+        result = self.detector.detect_for_video(mp_image, int(time.time()*1000))
         return result.face_landmarks
     
     def get_left_eye_ratio(self, landmarks):
@@ -50,4 +51,13 @@ class RatioCalculator:
 
         return vertical_dist/horizontal_dist
     
+    def extractIMF(self, IPH_ratios):
+        T = np.arange(len(IPH_ratios))
+        S = np.array(IPH_ratios)
+        emd = EMD()
+        imfs = emd.emd(S)
+
+        residue = S-np.sum(imfs, axis=0)
+        features = np.vstack([imfs, residue.reshape(1, -1)])
+        return features
 
