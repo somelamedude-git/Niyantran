@@ -55,9 +55,9 @@ class RatioCalculator:
         T = np.arange(len(IPH_ratios))
         S = np.array(IPH_ratios)
         emd = EMD()
-        imfs = emd.emd(S)
+        imfs = emd.emd(S, max_imf=4)
 
         residue = S-np.sum(imfs, axis=0)
         features = np.vstack([imfs, residue.reshape(1, -1)])
-        return features
+        return features.T
 
