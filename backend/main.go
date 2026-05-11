@@ -22,7 +22,7 @@ func main() {
 	r.MaxMultipartMemory = 10 << 20
 
 	r.POST("/user/results/create", h.ReceiveModelData)
-	r.POST("/uploads", auth.AuthMiddleware(redisClient),handlers.UploadFilesHandlers)
+	r.POST("/uploads", auth.AuthMiddleware(redisClient),h.UploadInfo)
 	r.POST("/login", h.Login)
 	r.POST("/users/create", h.CreateUser)
 	r.POST("/logout", auth.AuthMiddleware(redisClient),h.Logout)

@@ -7,12 +7,13 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-func UploadFilesHandlers(c *gin.Context) {
+func (h *Handler)UploadInfo(c *gin.Context) {
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		if err.Error() == "http: request body too large" {
@@ -23,6 +24,43 @@ func UploadFilesHandlers(c *gin.Context) {
 		return
 	}
 	defer file.Close()
+
+	screentime := c.PostForm("screentime")
+
+	userID := c.MustGet("userID").(string)
+
+	parsedUserId, err := strconv.Atoi(userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H {
+			"error" : "Internal server error",
+			"msg" : err.Error(),
+		})
+		return
+	}
+
+	var query =  `
+		INSERT INTO results (userid, screentime, time) 
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`
+
+	var resultID int
+
+	err = h.DB.QueryRow(
+		query,
+		parsedUserId,
+		screentime,
+		time.Now(),
+	).Scan(&resultID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error" : "Internal server error",
+			"msg" : err.Error(),
+		})
+		return
+	}
 
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
@@ -38,6 +76,11 @@ func UploadFilesHandlers(c *gin.Context) {
 	_, err = io.Copy(part, file)
 	if err != nil {
 		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
+		return
+	}
+
+	err = writer.WriteField("resultid", strconv.Itoa(resultID))
+	if err != nil {
 		return
 	}
 

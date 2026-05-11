@@ -79,6 +79,7 @@ func createTables(db *sql.DB) {
 		id SERIAL PRIMARY KEY,
 		userid INTEGER REFERENCES users(id) ON DELETE CASCADE,
 		probability FLOAT NOT NULL,
+		screentime int,
 		time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
 	`

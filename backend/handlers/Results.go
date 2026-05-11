@@ -1,27 +1,34 @@
 package handlers
 
 import (
-	"Niyantran/models"
 	"Niyantran/utils"
 	"fmt"
-	"time"
-
 	"github.com/gin-gonic/gin"
 )
 
 func (h *Handler) ReceiveModelData(c *gin.Context) {
-	var result models.Result
+	type Request struct {
+		Id int `json:"id"`
+		Probability float64 `json:"probability"`
+	}
 
-	if err := c.BindJSON(&result); err != nil {
+	var result Request
+
+	if err := c.ShouldBindBodyWithJSON(&result); err != nil {
 		utils.ErrorHandler(c, 400, "Bad Request", fmt.Sprintf("%v", err))
 		return
 	}
 
-	result.Time = time.Now()
+	var query = `
+	UPDATE results
+	SET probability = $1
+	WHERE id = $2
+	`
 	
 	_, err := h.DB.Exec(
-		"INSERT INTO results (userid, probability, time) VALUES ($1, $2, $3)",
-		result.UserId, result.Probabilty, result.Time,
+		query,
+		result.Probability,
+		result.Id,
 	)
 
 	if err != nil {
