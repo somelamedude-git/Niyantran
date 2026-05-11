@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
@@ -70,7 +71,7 @@ func (h *Handler) Login (c *gin.Context) {
 		return
 	}
 
-	toks, err := auth.IssueToken(tbc.ID)
+	toks, err := auth.IssueToken(strconv.Itoa(tbc.ID))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error" : "could not issue tokens"})
 		return

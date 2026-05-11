@@ -5,12 +5,10 @@ import (
 	"Niyantran/handlers"
 	"Niyantran/utils"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	_ "github.com/lib/pq"
 )
 
 func main() {
-	godotenv.Load()
 
 	db := InitDB()
 	redisClient := utils.NewRedis()
@@ -23,12 +21,15 @@ func main() {
 	r := gin.Default()
 	r.MaxMultipartMemory = 10 << 20
 
-	r.POST("/user/results/create", auth.AuthMiddleware(redisClient),h.ReceiveModelData)
+	r.POST("/user/results/create", h.ReceiveModelData)
 	r.POST("/uploads", auth.AuthMiddleware(redisClient),handlers.UploadFilesHandlers)
 	r.POST("/login", h.Login)
 	r.POST("/users/create", h.CreateUser)
 	r.POST("/logout", auth.AuthMiddleware(redisClient),h.Logout)
 	r.POST("/refresh", h.Refresh)
+	r.POST("/room/create", auth.AuthMiddleware(redisClient),h.CreateRoom)
+	r.POST("/room/join", auth.AuthMiddleware(redisClient),h.JoinRoom)
+	r.GET("/room/leaderboard/:code", auth.AuthMiddleware(redisClient),h.GetLeaderboard)
 
 	r.Run(":8000")
 }

@@ -29,6 +29,7 @@ services:
     restart: always
     depends_on:
       - db
+      - redis
     env_file:
       - ./backend/.env
     ports:
