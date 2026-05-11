@@ -29,7 +29,7 @@ func UploadFilesHandlers(c *gin.Context) {
 
 	t := time.Now()
 	str := t.Format("2006-01-02 15:04:05")
-	part, err := writer.CreateFormFile("file", str + " -- " + header.Filename)
+	part, err := writer.CreateFormFile("file", str+" -- "+header.Filename)
 	if err != nil {
 		utils.ErrorHandler(c, 500, "Internal server error", fmt.Sprintf("%v", err))
 		return
@@ -68,8 +68,8 @@ func UploadFilesHandlers(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
-		"code" : 200,
-		"info" : string(respData), 
+		"code": 200,
+		"info": string(respData),
 	})
 	c.Abort()
 }
