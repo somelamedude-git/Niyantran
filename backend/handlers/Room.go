@@ -180,7 +180,9 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	var results []Result
 
 	query := `
-        SELECT
+    SELECT *
+    FROM (
+        SELECT DISTINCT ON (users.id)
             users.name,
             users.email,
             results.probability
@@ -189,7 +191,9 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
         JOIN results ON results.userid = users.id
         JOIN rooms ON rooms.id = membership.room_id
         WHERE rooms.room_code = $1
-        ORDER BY results.probability DESC
+        ORDER BY users.id, results.time DESC
+    ) latest_results
+    ORDER BY probability DESC;
     `
 
 	rows, err := h.DB.Query(query, code)
