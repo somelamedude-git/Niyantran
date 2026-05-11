@@ -33,8 +33,9 @@ public class CameraModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
-    public void startForegroundService() {
+    public void startForegroundService(String token) {
         Intent intent = new Intent(context, ForegroundService.class);
+        intent.putExtra("token", token);
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
             context.startForegroundService(intent);

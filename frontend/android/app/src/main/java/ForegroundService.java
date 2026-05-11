@@ -34,6 +34,7 @@ public class ForegroundService extends Service {
 
     private Handler handler = new Handler();
     private boolean isRecording = false;
+    private String authToken = "";
 
     private Runnable task = new Runnable() {
         @Override
@@ -48,6 +49,10 @@ public class ForegroundService extends Service {
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null && intent.hasExtra("token")) {
+            authToken = intent.getStringExtra("token");
+        }
+
         createChannel();
         startForeground(1, getServiceNotification("Camera service is running..."));
         
@@ -190,6 +195,7 @@ public class ForegroundService extends Service {
                 Request request = new Request.Builder()
                         .url(serverUrl)
                         .post(requestBody)
+                        .addHeader("Authorization", "Bearer " + authToken)
                         .build();
 
                 client.newCall(request).enqueue(new Callback() {

@@ -11,6 +11,8 @@ import {
   ScrollView,
   StatusBar,
   DeviceEventEmitter,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 
 import { NativeModules } from 'react-native';
@@ -21,24 +23,38 @@ const App = () => {
   const [isServiceRunning, setIsServiceRunning] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
+  // Auth State
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [authToken, setAuthToken] = useState('');
+  const [authMode, setAuthMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState('');
+
+  const API_BASE_URL = 'http://127.0.0.1:8000';
+
   const addLog = (text: string, type: 'info' | 'error' | 'success' = 'info') => {
     setLogs((prev) => [...prev, { id: Date.now() + Math.random(), text, type }]);
   };
 
   useEffect(() => {
-    addLog('Application Started', 'success');
-    requestPermissions();
+    if (isAuthenticated) {
+      addLog('Application Started', 'success');
+      requestPermissions();
 
-    const subscription = DeviceEventEmitter.addListener('UploadLog', (event) => {
-      if (event && event.text && event.type) {
-        addLog(event.text, event.type);
-      }
-    });
+      const subscription = DeviceEventEmitter.addListener('UploadLog', (event) => {
+        if (event && event.text && event.type) {
+          addLog(event.text, event.type);
+        }
+      });
 
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+      return () => {
+        subscription.remove();
+      };
+    }
+  }, [isAuthenticated]);
 
   const requestPermissions = async () => {
     if (Platform.OS !== 'android') {
@@ -72,7 +88,7 @@ const App = () => {
   const startService = () => {
     addLog('Attempting to start foreground service...', 'info');
     if (CameraModule?.startForegroundService) {
-      CameraModule.startForegroundService();
+      CameraModule.startForegroundService(authToken);
       setIsServiceRunning(true);
       addLog('Foreground service command sent', 'success');
     } else {
@@ -90,6 +106,63 @@ const App = () => {
      addLog('Service stopped', 'info');
   };
 
+  const handleAuth = async () => {
+    setAuthError('');
+    
+    if (!email || !password) {
+      setAuthError('Please fill in all fields.');
+      return;
+    }
+    
+    setIsLoading(true);
+    
+    try {
+      if (authMode === 'register') {
+        if (!name) {
+          setAuthError('Please enter your name.');
+          setIsLoading(false);
+          return;
+        }
+        
+        const response = await fetch(`${API_BASE_URL}/users/create`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.error || "Registration failed");
+        }
+        
+        Alert.alert("Success", "Account created successfully! Please login.");
+        setAuthMode('login'); // Switch to login after successful registration
+        setPassword(''); // Clear password for security
+      } else {
+        const response = await fetch(`${API_BASE_URL}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password }),
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+          throw new Error(data.Error || data.error || "Login failed");
+        }
+        
+        // Login successful
+        setAuthToken(data.access_token);
+        setIsAuthenticated(true);
+      }
+    } catch (error: any) {
+      setAuthError(error.message || "Could not connect to server. Ensure backend is running and ADB reverse is active.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const getLogColor = (type: string) => {
     switch (type) {
       case 'error': return '#EF4444'; // Red
@@ -97,6 +170,100 @@ const App = () => {
       default: return '#94A3B8'; // Grayish blue
     }
   };
+
+  if (!isAuthenticated) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1, justifyContent: 'center' }}>
+          
+          <View style={styles.authContainer}>
+            <View style={styles.header}>
+              <Text style={styles.title}>NIYANTRAN</Text>
+              <View style={styles.glowLine} />
+            </View>
+
+            <View style={styles.authCard}>
+              <Text style={styles.authTitle}>
+                {authMode === 'login' ? 'Secure Login' : 'Create Account'}
+              </Text>
+
+              {authError ? (
+                <View style={styles.errorContainer}>
+                  <Text style={styles.errorText}>{authError}</Text>
+                </View>
+              ) : null}
+              
+              {authMode === 'register' && (
+                <View style={styles.inputContainer}>
+                  <Text style={styles.inputLabel}>FULL NAME</Text>
+                  <TextInput 
+                    style={styles.input} 
+                    placeholder="Enter your name"
+                    placeholderTextColor="#475569"
+                    value={name}
+                    onChangeText={setName}
+                  />
+                </View>
+              )}
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>EMAIL ADDRESS</Text>
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="Enter your email"
+                  placeholderTextColor="#475569"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <View style={styles.inputContainer}>
+                <Text style={styles.inputLabel}>PASSWORD</Text>
+                <TextInput 
+                  style={styles.input} 
+                  placeholder="Enter your password"
+                  placeholderTextColor="#475569"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </View>
+
+              <TouchableOpacity 
+                style={[styles.authSubmitBtn, isLoading && styles.authSubmitBtnDisabled]} 
+                onPress={handleAuth} 
+                activeOpacity={0.8}
+                disabled={isLoading}
+              >
+                <Text style={styles.authSubmitText}>
+                  {isLoading 
+                    ? 'PROCESSING...' 
+                    : (authMode === 'login' ? 'ACCESS SYSTEM' : 'REGISTER')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                style={styles.authSwitchBtn} 
+                onPress={() => {
+                  setAuthMode(authMode === 'login' ? 'register' : 'login');
+                  setAuthError('');
+                  setPassword('');
+                }}
+                disabled={isLoading}
+              >
+                <Text style={styles.authSwitchText}>
+                  {authMode === 'login' ? 'Need an account? Register' : 'Already have an account? Login'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -197,6 +364,97 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 5,
   },
+  
+  // Auth Styles
+  authContainer: {
+    flex: 1,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    paddingBottom: 40,
+  },
+  authCard: {
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
+    padding: 24,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.2)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  authTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 24,
+    letterSpacing: 1,
+    textAlign: 'center',
+  },
+  inputContainer: {
+    marginBottom: 16,
+  },
+  inputLabel: {
+    color: '#94A3B8',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 8,
+    letterSpacing: 1,
+  },
+  input: {
+    backgroundColor: 'rgba(30, 41, 59, 0.7)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    color: '#FFFFFF',
+    fontSize: 15,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  authSubmitBtn: {
+    backgroundColor: 'rgba(59, 130, 246, 0.15)',
+    borderWidth: 1,
+    borderColor: '#3B82F6',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  authSubmitText: {
+    color: '#3B82F6',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  authSubmitBtnDisabled: {
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
+    borderColor: 'rgba(59, 130, 246, 0.3)',
+  },
+  authSwitchBtn: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  authSwitchText: {
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  errorContainer: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorText: {
+    color: '#EF4444',
+    fontSize: 13,
+    textAlign: 'center',
+  },
+
+  // Main App Styles
   card: {
     backgroundColor: 'rgba(15, 23, 42, 0.6)',
     marginHorizontal: 20,
