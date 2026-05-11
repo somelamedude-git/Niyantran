@@ -14,7 +14,6 @@ import (
 func (h *Handler) CreateRoom(c *gin.Context) {
 	type Request struct {
 		Room_name string `json:"room_name"`
-		Created_by int `json:"created_by"`
 	}
 	var req Request
 
@@ -25,18 +24,51 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 		return
 	}
 
+	userID := c.MustGet("userID").(string)
+
+	parsedUserId, err := strconv.Atoi(userID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H {
+			"error" : "Internal server error",
+		})
+		return
+	}
+
 	roomCode := utils.GenerateRoomCode()
 
 	room := models.Room{
 		Room_name:  req.Room_name,
 		Room_code:  roomCode,
-		Created_by: req.Created_by,
+		Created_by: parsedUserId,
 		Created_at: time.Now(),
 	}
 
-	_, err := h.DB.Exec(
-		"INSERT INTO rooms (room_code, room_name, created_by, created_at) VALUES ($1, $2, $3, $4)",
-		room.Room_code, room.Room_name, room.Created_by, room.Created_at,
+	var roomID int
+
+	err = h.DB.QueryRow(
+	`INSERT INTO rooms 
+	(room_code, room_name, created_by, created_at) 
+	VALUES ($1, $2, $3, $4)
+	RETURNING id`,
+	room.Room_code,
+	room.Room_name,
+	room.Created_by,
+	room.Created_at,
+	).Scan(&roomID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = h.DB.Exec(
+		`INSERT INTO membership
+		(room_id, user_id, joined_at)
+		VALUES ($1, $2, $3)`,
+		roomID, parsedUserId, room.Created_at,
 	)
 
 	if err != nil {
