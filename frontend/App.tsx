@@ -16,11 +16,15 @@ import {
 } from 'react-native';
 
 import { NativeModules } from 'react-native';
-const { CameraModule } = NativeModules;
+import { AppBlocker } from './AppBlocker';
+
+const { CameraModule, AppBlockerModule } = NativeModules;
 
 const App = () => {
   const [logs, setLogs] = useState<{ id: number; text: string; type: 'info' | 'error' | 'success' }[]>([]);
-  const [isServiceRunning, setIsServiceRunning] = useState(false);
+  const [isGrayscale, setIsGrayscale] = useState(false);
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'appBlocker'>('dashboard');
+  const [showLogs, setShowLogs] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   // Auth State
@@ -39,10 +43,39 @@ const App = () => {
     setLogs((prev) => [...prev, { id: Date.now() + Math.random(), text, type }]);
   };
 
+  // On startup, check if we have a saved token
   useEffect(() => {
-    if (isAuthenticated) {
+    const restoreSession = async () => {
+      if (AppBlockerModule?.getAuthToken) {
+        try {
+          const savedToken = await AppBlockerModule.getAuthToken();
+            if (savedToken) {
+            setAuthToken(savedToken);
+            setIsAuthenticated(true);
+            // Service will start after permissions are granted in useEffect
+            // Re-seed the blocked apps from backend to refresh the native list
+            try {
+              const resp = await fetch('http://127.0.0.1:8000/blocked_apps', {
+                headers: { 'Authorization': `Bearer ${savedToken}` }
+              });
+              const data = await resp.json();
+              if (resp.ok && data.packages && AppBlockerModule?.updateBlockedApps) {
+                AppBlockerModule.updateBlockedApps(data.packages);
+              }
+            } catch (_) {}
+          }
+        } catch (e) {
+          // No saved token, show login
+        }
+      }
+    };
+    restoreSession();
+  }, []);
+
+  useEffect(() => {
+    if (isAuthenticated && authToken) {
       addLog('Application Started', 'success');
-      requestPermissions();
+      requestPermissions(authToken);
 
       const subscription = DeviceEventEmitter.addListener('UploadLog', (event) => {
         if (event && event.text && event.type) {
@@ -50,13 +83,34 @@ const App = () => {
         }
       });
 
+      const warningSub = DeviceEventEmitter.addListener('ShowAppWarning', (pkg) => {
+        Alert.alert("Usage Warning", `You have been using ${pkg} for 15 minutes! Consider taking a break.`);
+      });
+
+      // Fetch blocked apps to initialize the native service
+      const fetchBlockedApps = async () => {
+        try {
+          const response = await fetch(`${API_BASE_URL}/blocked_apps`, {
+            headers: { 'Authorization': `Bearer ${authToken}` }
+          });
+          const data = await response.json();
+          if (response.ok && data.packages && AppBlockerModule?.updateBlockedApps) {
+            AppBlockerModule.updateBlockedApps(data.packages);
+            addLog(`Loaded ${data.packages.length} blocked apps`, 'info');
+          }
+        } catch (e) {
+          addLog('Failed to fetch blocked apps', 'error');
+        }
+      };
+      fetchBlockedApps();
+
       return () => {
         subscription.remove();
+        warningSub.remove();
       };
     }
-  }, [isAuthenticated]);
-
-  const requestPermissions = async () => {
+  }, [isAuthenticated, authToken]);
+  const requestPermissions = async (token: string) => {
     if (Platform.OS !== 'android') {
       addLog('Permissions request skipped (not Android)', 'info');
       return;
@@ -64,18 +118,35 @@ const App = () => {
 
     try {
       addLog('Requesting permissions...', 'info');
-      const results = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+      
+      const permissionsToRequest = [
         PermissionsAndroid.PERMISSIONS.CAMERA,
         PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-      ]);
+      ];
+      
+      if (Platform.Version >= 33) {
+        permissionsToRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
 
-      const notif = results[PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS] === PermissionsAndroid.RESULTS.GRANTED;
-      const cam = results[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED;
-      const mic = results[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO] === PermissionsAndroid.RESULTS.GRANTED;
+      const results = await PermissionsAndroid.requestMultiple(permissionsToRequest);
+
+      const notifResult = Platform.Version >= 33 ? results[PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS] : PermissionsAndroid.RESULTS.GRANTED;
+      const camResult = results[PermissionsAndroid.PERMISSIONS.CAMERA];
+      const micResult = results[PermissionsAndroid.PERMISSIONS.RECORD_AUDIO];
+
+      addLog(`Perms: Notif=${notifResult}, Cam=${camResult}, Mic=${micResult}`, 'info');
+
+      const notif = notifResult === PermissionsAndroid.RESULTS.GRANTED;
+      const cam = camResult === PermissionsAndroid.RESULTS.GRANTED;
+      const mic = micResult === PermissionsAndroid.RESULTS.GRANTED;
 
       if (notif && cam && mic) {
         addLog('All permissions granted successfully', 'success');
+        // Start background service permanently only after permissions are granted
+        if (CameraModule?.startForegroundService) {
+          CameraModule.startForegroundService(token);
+          addLog('Background Monitoring Service Started', 'success');
+        }
       } else {
         addLog('Some permissions were denied', 'error');
         Alert.alert("Permissions needed", "Please enable notifications, camera, and microphone permissions");
@@ -83,27 +154,33 @@ const App = () => {
     } catch (e) {
       addLog(`Permission error: ${e}`, 'error');
     }
-  };
 
-  const startService = () => {
-    addLog('Attempting to start foreground service...', 'info');
-    if (CameraModule?.startForegroundService) {
-      CameraModule.startForegroundService(authToken);
-      setIsServiceRunning(true);
-      addLog('Foreground service command sent', 'success');
-    } else {
-      addLog('CameraModule.startForegroundService is undefined', 'error');
-      Alert.alert("Error", "Foreground service not available on this module.");
+
+    if (AppBlockerModule?.checkAccessibilityPermission) {
+      const accessGranted = await AppBlockerModule.checkAccessibilityPermission();
+      if (!accessGranted) {
+        addLog('Accessibility Service required for App Blocker', 'info');
+        Alert.alert(
+          "Accessibility Service Required", 
+          "Please enable the Accessibility Service for Niyantran so we can detect distracting apps and block them.",
+          [{ text: "OK", onPress: () => AppBlockerModule.requestAccessibilityPermission() }]
+        );
+      }
     }
   };
-
-  const stopService = () => {
-     addLog('Stopping foreground service...', 'info');
-     if (CameraModule?.stopForegroundService) {
-       CameraModule.stopForegroundService();
-     }
-     setIsServiceRunning(false);
-     addLog('Service stopped', 'info');
+  const toggleGrayscale = async () => {
+    try {
+      if (CameraModule?.enableGrayscale) {
+        await CameraModule.enableGrayscale(!isGrayscale);
+        setIsGrayscale(!isGrayscale);
+        addLog(`Grayscale mode ${!isGrayscale ? 'enabled' : 'disabled'}`, 'success');
+      } else {
+        addLog('CameraModule.enableGrayscale is undefined', 'error');
+      }
+    } catch (e: any) {
+      addLog(`Grayscale error: ${e.message}`, 'error');
+      Alert.alert("Permission Required", e.message || "Failed to toggle grayscale.");
+    }
   };
 
   const handleAuth = async () => {
@@ -155,6 +232,11 @@ const App = () => {
         // Login successful
         setAuthToken(data.access_token);
         setIsAuthenticated(true);
+        // Persist token so app remembers after close
+        if (AppBlockerModule?.saveAuthToken) {
+          AppBlockerModule.saveAuthToken(data.access_token);
+        }
+        // Service will start after permissions are granted in useEffect
       }
     } catch (error: any) {
       setAuthError(error.message || "Could not connect to server. Ensure backend is running and ADB reverse is active.");
@@ -265,6 +347,16 @@ const App = () => {
     );
   }
 
+  if (currentScreen === 'appBlocker') {
+    return (
+      <AppBlocker 
+        onBack={() => setCurrentScreen('dashboard')} 
+        authToken={authToken} 
+        API_BASE_URL={API_BASE_URL} 
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
@@ -278,57 +370,63 @@ const App = () => {
       {/* Status Card */}
       <View style={styles.card}>
         <View style={styles.statusRow}>
-          <Text style={styles.statusLabel}>Stealth Engine:</Text>
-          <View style={[styles.statusBadge, { backgroundColor: isServiceRunning ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)' }]}>
-            <View style={[styles.statusDot, { backgroundColor: isServiceRunning ? '#10B981' : '#EF4444' }]} />
-            <Text style={[styles.statusText, { color: isServiceRunning ? '#10B981' : '#EF4444' }]}>
-              {isServiceRunning ? 'ACTIVE' : 'OFFLINE'}
+          <Text style={styles.statusLabel}>Background Monitoring</Text>
+          <View style={[styles.statusBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+            <View style={[styles.statusDot, { backgroundColor: '#10B981' }]} />
+            <Text style={[styles.statusText, { color: '#10B981' }]}>
+              ACTIVE
             </Text>
           </View>
         </View>
       </View>
 
-      {/* Action Buttons */}
-      <View style={styles.buttonContainer}>
+      <View style={{ paddingHorizontal: 20, marginBottom: 30, gap: 16 }}>
         <TouchableOpacity 
-          style={[styles.button, isServiceRunning ? styles.buttonDisabled : styles.buttonPrimary]} 
-          onPress={startService}
-          disabled={isServiceRunning}
+          style={[styles.actionButton, isGrayscale ? styles.actionButtonActive : null]} 
+          onPress={toggleGrayscale}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>ENGAGE</Text>
+          <Text style={[styles.actionButtonText, isGrayscale && { color: '#FFFFFF' }]}>
+            {isGrayscale ? 'DISABLE GRAYSCALE' : 'ENABLE GRAYSCALE'}
+          </Text>
         </TouchableOpacity>
-
+        
         <TouchableOpacity 
-          style={[styles.button, !isServiceRunning ? styles.buttonDisabled : styles.buttonDanger]} 
-          onPress={stopService}
-          disabled={!isServiceRunning}
+          style={styles.actionButton} 
+          onPress={() => setCurrentScreen('appBlocker')}
           activeOpacity={0.8}
         >
-          <Text style={styles.buttonText}>DISENGAGE</Text>
+          <Text style={styles.actionButtonText}>CONFIGURE APP BLOCKER</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Logs Section */}
-      <View style={styles.logHeaderContainer}>
-        <Text style={styles.logHeader}>Terminal Output</Text>
-        <View style={styles.logHeaderLine} />
-      </View>
-      
-      <View style={styles.logContainer}>
-        <ScrollView 
-          ref={scrollViewRef}
-          onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
-          style={styles.scrollView}
-        >
-          {logs.map((log) => (
-            <View key={log.id} style={styles.logEntry}>
-              <Text style={styles.logTime}>[{new Date(log.id).toLocaleTimeString()}]</Text>
-              <Text style={[styles.logText, { color: getLogColor(log.type) }]}>{log.text}</Text>
-            </View>
-          ))}
-        </ScrollView>
-      </View>
+      {/* Logs Toggle */}
+      <TouchableOpacity 
+        style={styles.logToggleBtn} 
+        onPress={() => setShowLogs(!showLogs)}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.logToggleText}>
+          {showLogs ? 'Hide System Logs' : 'View System Logs'}
+        </Text>
+      </TouchableOpacity>
+
+      {showLogs && (
+        <View style={styles.logContainer}>
+          <ScrollView 
+            ref={scrollViewRef}
+            onContentSizeChange={() => scrollViewRef.current?.scrollToEnd({ animated: true })}
+            style={styles.scrollView}
+          >
+            {logs.map((log) => (
+              <View key={log.id} style={styles.logEntry}>
+                <Text style={styles.logTime}>[{new Date(log.id).toLocaleTimeString()}]</Text>
+                <Text style={[styles.logText, { color: getLogColor(log.type) }]}>{log.text}</Text>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -495,60 +593,40 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 2,
   },
-  buttonContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 16,
-    marginBottom: 30,
-  },
-  button: {
-    flex: 1,
+  actionButton: {
+    backgroundColor: 'rgba(30, 41, 59, 0.4)',
     paddingVertical: 18,
-    borderRadius: 14,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
+    borderColor: 'rgba(59, 130, 246, 0.3)',
   },
-  buttonPrimary: {
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+  actionButtonActive: {
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
     borderColor: '#3B82F6',
   },
-  buttonDanger: {
-    backgroundColor: 'rgba(239, 68, 68, 0.1)',
-    borderColor: '#EF4444',
-  },
-  buttonDisabled: {
-    backgroundColor: 'rgba(30, 41, 59, 0.5)',
-    borderColor: 'transparent',
-  },
-  buttonText: {
-    color: '#FFFFFF',
+  actionButtonText: {
+    color: '#94A3B8',
     fontWeight: '800',
     fontSize: 14,
     letterSpacing: 2,
   },
-  logHeaderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 24,
-    marginBottom: 16,
+  logToggleBtn: {
+    alignSelf: 'center',
+    padding: 10,
+    marginBottom: 10,
   },
-  logHeader: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: 2,
+  logToggleText: {
+    color: '#475569',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 1,
     textTransform: 'uppercase',
-  },
-  logHeaderLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    marginLeft: 12,
   },
   logContainer: {
     flex: 1,
-    backgroundColor: '#050810',
+    backgroundColor: 'rgba(0,0,0,0.3)',
     marginHorizontal: 20,
     marginBottom: 20,
     borderRadius: 16,

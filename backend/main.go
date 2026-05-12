@@ -30,6 +30,9 @@ func main() {
 	r.POST("/room/create", auth.AuthMiddleware(redisClient),h.CreateRoom)
 	r.POST("/room/join", auth.AuthMiddleware(redisClient),h.JoinRoom)
 	r.GET("/room/leaderboard/:code", auth.AuthMiddleware(redisClient),h.GetLeaderboard)
+	
+	r.GET("/blocked_apps", auth.AuthMiddleware(redisClient), h.GetBlockedApps)
+	r.POST("/blocked_apps", auth.AuthMiddleware(redisClient), h.SaveBlockedApps)
 
 	r.Run(":8000")
 }

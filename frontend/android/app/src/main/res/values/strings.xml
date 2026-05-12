@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">frontend</string>
+    <string name="accessibility_service_description">Niyantran needs Accessibility Service to detect when blocked apps are opened and enforce usage limits.</string>
 </resources>

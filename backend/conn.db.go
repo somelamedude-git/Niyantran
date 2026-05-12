@@ -82,6 +82,13 @@ func createTables(db *sql.DB) {
 		screentime int,
 		time TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	);
+
+	CREATE TABLE IF NOT EXISTS blocked_apps (
+		id SERIAL PRIMARY KEY,
+		user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+		package_name VARCHAR(255) NOT NULL,
+		UNIQUE(user_id, package_name)
+	);
 	`
 	_, err := db.Exec(query)
 	if err != nil {

