@@ -7,8 +7,6 @@ def extract_metadata(video_path):
     video_info = metadata.Metadata.validate_videos([video_path])[0]
     return video_info
 
-
-
 def standardize_video(video_path: list[str], output_dir: str):
     standardizer = standardize.VideoStandardizer(
         size="224x224",
@@ -31,7 +29,6 @@ def load_tensors(video_path: str):
     video_tensor = video_loader.load_file(video_path)
     return video_tensor
 
-
 def augment_video(video_tensor):
     video_augmentor = augmentor.VideoAugmentor(
         device="cpu",
@@ -50,4 +47,3 @@ def augment_video(video_tensor):
         ]
     chained_result = augmentor.chain(video_tensor, augmentations)
     return chained_result
-    
