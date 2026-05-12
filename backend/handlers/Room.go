@@ -29,8 +29,8 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 	parsedUserId, err := strconv.Atoi(userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H {
-			"error" : "Internal server error",
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Internal server error",
 		})
 		return
 	}
@@ -47,14 +47,14 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 	var roomID int
 
 	err = h.DB.QueryRow(
-	`INSERT INTO rooms 
+		`INSERT INTO rooms 
 	(room_code, room_name, created_by, created_at) 
 	VALUES ($1, $2, $3, $4)
 	RETURNING id`,
-	room.Room_code,
-	room.Room_name,
-	room.Created_by,
-	room.Created_at,
+		room.Room_code,
+		room.Room_name,
+		room.Created_by,
+		room.Created_at,
 	).Scan(&roomID)
 
 	if err != nil {
@@ -128,8 +128,8 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	parsedUserId, err := strconv.Atoi(userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H {
-			"error" : "Internal server error",
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Internal server error",
 		})
 		return
 	}
@@ -174,7 +174,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 	type Result struct {
 		Name        string  `json:"name"`
 		Email       string  `json:"email"`
-		Probability float64 `json:"probability"`
+		ScreenTime  float64 `json:"screentime"`
 	}
 
 	var results []Result
@@ -184,8 +184,8 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
     FROM (
         SELECT DISTINCT ON (users.id)
             users.name,
-            users.email,
-            results.probability
+            users.email
+			results.screentime
         FROM membership
         JOIN users ON users.id = membership.user_id
         JOIN results ON results.userid = users.id
@@ -193,7 +193,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
         WHERE rooms.room_code = $1
         ORDER BY users.id, results.time DESC
     ) latest_results
-    ORDER BY probability DESC;
+    ORDER BY screentime DESC;
     `
 
 	rows, err := h.DB.Query(query, code)
@@ -211,7 +211,7 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
 		err := rows.Scan(
 			&result.Name,
 			&result.Email,
-			&result.Probability,
+			&result.ScreenTime,
 		)
 
 		if err != nil {
