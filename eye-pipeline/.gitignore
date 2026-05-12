@@ -1,1 +1,23 @@
 venv
+
+# Data
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Model weights
+models/*
+!models/.gitkeep
+
+# Output
+output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Misc
+*.DS_Store

@@ -3,6 +3,7 @@ package handlers
 import (
 	"Niyantran/utils"
 	"bytes"
+	"database/sql"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -39,9 +40,43 @@ func (h *Handler)UploadInfo(c *gin.Context) {
 		return
 	}
 
-	var query =  `
-		INSERT INTO results (userid, screentime, time) 
-		VALUES ($1, $2, $3)
+	var query = `
+	SELECT average, sno
+	FROM results
+	WHERE userid = $1
+	`
+
+	var average float64
+	var sno int
+
+	err = h.DB.QueryRow(query, parsedUserId).Scan(&average, &sno)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			average = 0
+			sno = 0
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H {
+				"error" : "inetrnal server error",
+			})
+
+			return
+		}
+	}
+
+	screenTimeFloat, err := strconv.ParseFloat(screentime, 64)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error" : "internal server error",
+		})
+		return
+	}
+
+	var navg = ((average * float64(sno)) + screenTimeFloat) / float64(sno+1)
+
+	query =  `
+		INSERT INTO results (sno, userid, average, screentime, time) 
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
 
@@ -49,7 +84,9 @@ func (h *Handler)UploadInfo(c *gin.Context) {
 
 	err = h.DB.QueryRow(
 		query,
+		sno+1,
 		parsedUserId,
+		navg,
 		screentime,
 		time.Now(),
 	).Scan(&resultID)

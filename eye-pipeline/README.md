@@ -1,140 +1,168 @@
-# Eye Tracking & Drowsiness Detection
+# Dry Eye Detection
 
-A computer vision pipeline for real-time eye tracking and drowsiness detection using facial landmarks. Built with MediaPipe's Face Landmarker and OpenCV.
+A computer vision pipeline for dry eye detection using facial landmarks, Eye Aspect Ratio (EAR), Empirical Mode Decomposition (EMD), and an LSTM classifier. Built with MediaPipe and OpenCV.
 
 ---
 
-## Overview
+## Pipeline
 
-This project processes video input (live webcam or recorded footage) to track eye regions, compute eye aspect ratios, and lay the groundwork for drowsiness/blink detection. The pipeline covers video preprocessing, facial landmark detection, eye region masking, and ratio-based eye state analysis.
+```
+Raw video
+   │
+   ▼
+Preprocessing (standardize to 224×224, 30fps, RGB)
+   │
+   ▼
+Frame-by-frame landmark detection (MediaPipe FaceLandmarker)
+   │
+   ▼
+Eye Aspect Ratio (EAR) per frame → EAR time series
+   │
+   ▼
+Empirical Mode Decomposition (EMD) → IMF feature matrix (n_frames × 5)
+   │
+   ▼
+LSTM classifier → dry eye probability → NORMAL / DRY EYE DETECTED
+```
 
 ---
 
 ## Project Structure
 
 ```
-├── detection.py        # Eye region detection and masking using facial landmarks
-├── ratios.py           # Eye Aspect Ratio (EAR) calculation for blink/drowsiness detection
-├── preprocessing.py    # Video standardization, tensor loading, and augmentation
-├── face_landmarker.task  # MediaPipe Face Landmarker model file
-├── output/             # Processed video output
-└── yashu.mp4           # Sample test video
+├── src/
+│   ├── detection.py        # Eye region masking via facial landmarks
+│   ├── ratios.py           # EAR computation + EMD decomposition
+│   ├── preprocessing.py    # Video standardization, tensor loading, augmentation
+│   ├── pipeline.py         # Orchestrates the full pipeline end-to-end
+│   ├── inference.py        # CLI entry point for running inference
+│   └── model/
+│       └── lstm.py         # LSTM model definition + loader wrapper
+│
+├── config/
+│   └── config.yaml         # All tunable parameters
+│
+├── models/                 # Drop trained LSTM weights here (.pt)
+├── data/
+│   ├── raw/                # Input videos go here
+│   └── processed/          # Standardized videos written here
+├── output/                 # Masked frame outputs
+├── face_landmarker.task    # MediaPipe Face Landmarker model
+└── requirements.txt
+```
+
+---
+
+## Quickstart
+
+### Install dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### Run inference on a video
+```bash
+# Feature extraction only (no LSTM weights needed)
+python -m src.inference --video data/raw/sample.mp4
+
+# Full inference with LSTM
+python -m src.inference --video data/raw/sample.mp4 --model models/lstm.pt
+
+# Save IMF features for training
+python -m src.inference --video data/raw/sample.mp4 --save-features output/features.npy
+```
+
+### Run eye masking on a video
+```bash
+python src/detection.py data/raw/sample.mp4
 ```
 
 ---
 
 ## Modules
 
-### `detection.py` — Eye Tracker
+### `src/detection.py` — Eye Tracker
+Detects and isolates eye regions from video frames using MediaPipe's 478-point facial landmark mesh. Uses 16 landmark points per eye to construct accurate eye polygons and masks out everything else.
 
-Detects and isolates eye regions from video frames using MediaPipe's 478-point facial landmark mesh.
-
-- Uses 16 landmark points per eye to construct accurate eye polygons
-- Masks out everything except the eye regions, returning a clean isolated view
-- Runs in MediaPipe's VIDEO mode for efficient frame-by-frame processing
-- Supports live webcam input out of the box
-
-```python
-from detection import EyeTracker
-
-tracker = EyeTracker(model_path='face_landmarker.task')
-processed_frame = tracker.process_frame(frame)
-tracker.close()
-```
-
-Run directly for live webcam demo:
-```bash
-python detection.py
-```
-Press `ESC` to exit.
-
----
-
-### `ratios.py` — Eye Aspect Ratio Calculator
-
-Computes the Eye Aspect Ratio (EAR) for both eyes — the standard metric used in drowsiness and blink detection research.
+### `src/ratios.py` — Ratio Calculator
+Computes the **Eye Aspect Ratio (EAR)** for both eyes — the standard metric for blink detection. Also runs **Empirical Mode Decomposition (EMD)** on a sequence of EAR values to extract IMF features for the LSTM.
 
 **EAR = vertical distance / horizontal distance**
 
-When the eye is open, EAR stays relatively constant. When the eye closes (blink or drowsiness), EAR drops sharply toward zero.
+In dry eye conditions, blink rate and completeness change measurably — EAR over time captures this signal.
 
-```python
-from ratios import RatioCalculator
+### `src/preprocessing.py` — Video Preprocessor
+Handles all video preparation before detection:
+- Metadata extraction and validation
+- Standardization to 224×224, 30fps, h264, RGB
+- Tensor loading (64 frames, stride 2)
+- Augmentation (crop, flip, brightness, contrast)
 
-calculator = RatioCalculator(model_path='face_landmarker.task')
-landmarks = calculator.get_landmarks(frame)
+### `src/pipeline.py` — Pipeline Orchestrator
+Wires all components together. Takes a raw video path, runs the full stack, and returns EAR sequence, IMF features, and dry eye classification.
 
-left_ear  = calculator.get_left_eye_ratio(landmarks)
-right_ear = calculator.get_right_eye_ratio(landmarks)
-```
+### `src/inference.py` — CLI Entry Point
+Loads config, optionally loads LSTM weights, runs the pipeline, and prints results. Supports saving IMF features as `.npy` for training.
 
----
-
-### `preprocessing.py` — Video Preprocessing Pipeline
-
-Handles all video preparation steps before feeding into the detection pipeline.
-
-- **Metadata extraction** — validates and inspects video files
-- **Standardization** — resizes to 224×224, enforces 30fps, h264 codec, RGB color space
-- **Tensor loading** — loads 64 frames with stride 2 into CPU tensors
-- **Augmentation** — supports crop, flip, brightness, contrast adjustments (individual and chained)
-
-```python
-from preprocessing import extract_metadata, standardize_video, load_tensors, augment_video
-
-# Validate and inspect
-info = extract_metadata("yashu.mp4")
-
-# Standardize to consistent format
-standardize_video(["yashu.mp4"], output_dir="output/")
-
-# Load as tensor for model input
-tensor = load_tensors("output/yashu.mp4")
-
-# Apply augmentations
-augmented = augment_video(tensor)
-```
-
-> Requires the `vid_prepper` package.
+### `src/model/lstm.py` — LSTM Model
+Placeholder LSTM architecture ready for your weights. Drop your trained `.pt` file into `models/` and update `config/config.yaml`.
 
 ---
 
-## Dependencies
+## Configuration
 
-- [MediaPipe](https://developers.google.com/mediapipe) — facial landmark detection
-- [OpenCV](https://opencv.org/) — video capture and image processing
-- [NumPy](https://numpy.org/) — numerical operations
-- `vid_prepper` — video standardization and augmentation
+All parameters are in `config/config.yaml`:
 
-Install core dependencies:
-```bash
-pip install mediapipe opencv-python numpy
+```yaml
+model:
+  face_landmarker_path: "face_landmarker.task"
+  lstm_weights_path: "models/lstm.pt"
+
+preprocessing:
+  size: "224x224"
+  fps: 30
+
+emd:
+  max_imf: 4
+
+inference:
+  device: "cpu"
+  threshold: 0.5
 ```
 
 ---
 
 ## Landmark Reference
 
-MediaPipe's Face Landmarker provides 478 facial landmarks. Key indices used in this project:
-
 | Region | Landmarks Used |
 |---|---|
-| Left eye | 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398 |
-| Right eye | 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246 |
+| Left eye mask | 362, 382, 381, 380, 374, 373, 390, 249, 263, 466, 388, 387, 386, 385, 384, 398 |
+| Right eye mask | 33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246 |
 | Left EAR points | 159 (upper), 145 (lower), 33 (outer), 133 (inner) |
 | Right EAR points | 386 (upper), 374 (lower), 263 (outer), 362 (inner) |
 
 ---
 
-## Status
+## Dependencies
 
-Work in progress. Current implementation covers:
+- [MediaPipe](https://developers.google.com/mediapipe) — facial landmark detection
+- [OpenCV](https://opencv.org/) — video I/O and image processing
+- [NumPy](https://numpy.org/) — numerical operations
+- [PyEMD](https://pyemd.readthedocs.io/) — Empirical Mode Decomposition
+- [PyTorch](https://pytorch.org/) — LSTM model
+- `vid_prepper` — video standardization and augmentation
+
+---
+
+## Status
 
 - [x] Facial landmark detection pipeline
 - [x] Eye region isolation and masking
-- [x] Eye Aspect Ratio computation
+- [x] Eye Aspect Ratio (EAR) computation
+- [x] EMD-based feature extraction
 - [x] Video preprocessing and augmentation pipeline
-- [ ] Blink detection logic
-- [ ] Drowsiness classification model
-- [ ] End-to-end inference pipeline
-- [ ] Real-time alerting
+- [x] End-to-end pipeline wiring
+- [x] CLI inference entry point
+- [x] LSTM model scaffold
+- [ ] LSTM training
+- [ ] Dry eye classification evaluation
