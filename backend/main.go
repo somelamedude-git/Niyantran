@@ -30,6 +30,6 @@ func main() {
 	r.POST("/room/create", auth.AuthMiddleware(redisClient),h.CreateRoom)
 	r.POST("/room/join", auth.AuthMiddleware(redisClient),h.JoinRoom)
 	r.GET("/room/leaderboard/:code", auth.AuthMiddleware(redisClient),h.GetLeaderboard)
-
+	r.GET("/results", auth.AuthMiddleware(redisClient), h.RetreiveResults)
 	r.Run(":8000")
 }
