@@ -26,7 +26,7 @@ class RatioCalculator:
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb_frame)
         result = self.detector.detect_for_video(mp_image, int(time.time()*1000))
         return result.face_landmarks
-    
+
     def get_left_eye_ratio(self, landmarks):
         upper = np.array([landmarks[159].x, landmarks[159].y])
         lower = np.array([landmarks[145].x, landmarks[145].y])
@@ -50,7 +50,7 @@ class RatioCalculator:
         horizontal_dist = np.linalg.norm(outer-inner)
 
         return vertical_dist/horizontal_dist
-    
+
     def extractIMF(self, IPH_ratios):
         T = np.arange(len(IPH_ratios))
         S = np.array(IPH_ratios)
@@ -60,4 +60,3 @@ class RatioCalculator:
         residue = S-np.sum(imfs, axis=0)
         features = np.vstack([imfs, residue.reshape(1, -1)])
         return features.T
-

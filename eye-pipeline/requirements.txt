@@ -1,0 +1,7 @@
+mediapipe==0.10.14
+opencv-python==4.10.0.84
+numpy==1.26.4
+PyEMD==1.5.0
+torch==2.3.0
+pyyaml==6.0.1
+vid_prepper
