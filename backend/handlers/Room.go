@@ -65,7 +65,7 @@ func (h *Handler) CreateRoom(c *gin.Context) {
 	}
 
 	_, err = h.DB.Exec(
-		`INSERT INTO membership
+		`INSERT INTO memberships
 		(room_id, user_id, joined_at)
 		VALUES ($1, $2, $3)`,
 		roomID, parsedUserId, room.Created_at,
@@ -141,7 +141,7 @@ func (h *Handler) JoinRoom(c *gin.Context) {
 	}
 
 	_, err = h.DB.Exec(
-		"INSERT INTO membership (room_id, user_id, joined_at) VALUES ($1, $2, $3)",
+		"INSERT INTO memberships (room_id, user_id, joined_at) VALUES ($1, $2, $3)",
 		member.Room_id,
 		member.User_id,
 		member.Joined_at,
@@ -184,12 +184,12 @@ func (h *Handler) GetLeaderboard(c *gin.Context) {
     FROM (
         SELECT DISTINCT ON (users.id)
             users.name,
-            users.email
+            users.email,
 			results.screentime
-        FROM membership
-        JOIN users ON users.id = membership.user_id
+        FROM memberships
+        JOIN users ON users.id = memberships.user_id
         JOIN results ON results.userid = users.id
-        JOIN rooms ON rooms.id = membership.room_id
+        JOIN rooms ON rooms.id = memberships.room_id
         WHERE rooms.room_code = $1
         ORDER BY users.id, results.time DESC
     ) latest_results

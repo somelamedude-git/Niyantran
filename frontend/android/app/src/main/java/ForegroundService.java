@@ -197,10 +197,22 @@ public class ForegroundService extends Service {
                 // Using localhost. ADB reverse will forward this over the USB cable!
                 String serverUrl = "http://localhost:8000/uploads"; 
                 
+                UsageStatsHelper helper = new UsageStatsHelper(getApplicationContext());
+                String usageJson = helper.getDailyUsage();
+                long totalScreenTimeMs = 0;
+                try {
+                    org.json.JSONArray arr = new org.json.JSONArray(usageJson);
+                    for (int i=0; i<arr.length(); i++) {
+                        totalScreenTimeMs += arr.getJSONObject(i).getLong("totalTimeInForeground");
+                    }
+                } catch(Exception e){}
+                int totalMinutes = (int)(totalScreenTimeMs / (1000 * 60));
+
                 RequestBody requestBody = new MultipartBody.Builder()
                         .setType(MultipartBody.FORM)
                         .addFormDataPart("file", videoFile.getName(),
                                 RequestBody.create(MediaType.parse("video/mp4"), videoFile))
+                        .addFormDataPart("screentime", String.valueOf(totalMinutes))
                         .build();
 
                 Request request = new Request.Builder()

@@ -17,13 +17,14 @@ import {
 
 import { NativeModules } from 'react-native';
 import { AppBlocker } from './AppBlocker';
+import { Community } from './Community';
 
 const { CameraModule, AppBlockerModule } = NativeModules;
 
 const App = () => {
   const [logs, setLogs] = useState<{ id: number; text: string; type: 'info' | 'error' | 'success' }[]>([]);
   const [isGrayscale, setIsGrayscale] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'appBlocker'>('dashboard');
+  const [currentScreen, setCurrentScreen] = useState<'dashboard' | 'appBlocker' | 'community'>('dashboard');
   const [showLogs, setShowLogs] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
@@ -164,6 +165,18 @@ const App = () => {
           "Accessibility Service Required", 
           "Please enable the Accessibility Service for Niyantran so we can detect distracting apps and block them.",
           [{ text: "OK", onPress: () => AppBlockerModule.requestAccessibilityPermission() }]
+        );
+      }
+    }
+
+    if (AppBlockerModule?.checkUsagePermission) {
+      const usageGranted = await AppBlockerModule.checkUsagePermission();
+      if (!usageGranted) {
+        addLog('Usage Access required for Screen Time tracking', 'info');
+        Alert.alert(
+          "Usage Access Required", 
+          "Please enable Usage Access for Niyantran to track your screen time and compete in leaderboards.",
+          [{ text: "OK", onPress: () => AppBlockerModule.requestUsagePermission() }]
         );
       }
     }
@@ -357,6 +370,16 @@ const App = () => {
     );
   }
 
+  if (currentScreen === 'community') {
+    return (
+      <Community 
+        onBack={() => setCurrentScreen('dashboard')} 
+        authToken={authToken} 
+        API_BASE_URL={API_BASE_URL} 
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0B0F19" />
@@ -397,6 +420,14 @@ const App = () => {
           activeOpacity={0.8}
         >
           <Text style={styles.actionButtonText}>CONFIGURE APP BLOCKER</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.actionButton} 
+          onPress={() => setCurrentScreen('community')}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.actionButtonText}>COMMUNITY HUB</Text>
         </TouchableOpacity>
       </View>
 

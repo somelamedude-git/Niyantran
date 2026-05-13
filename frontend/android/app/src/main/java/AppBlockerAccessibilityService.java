@@ -40,6 +40,10 @@ public class AppBlockerAccessibilityService extends AccessibilityService {
         return instance;
     }
 
+    public String getCurrentForegroundApp() {
+        return currentPackage;
+    }
+
     public void reloadBlockedApps() {
         SharedPreferences prefs = getSharedPreferences("NiyantranPrefs", Context.MODE_PRIVATE);
         String savedApps = prefs.getString("blocked_apps", "");

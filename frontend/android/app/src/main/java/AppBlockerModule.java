@@ -156,6 +156,47 @@ public class AppBlockerModule extends ReactContextBaseJavaModule {
     }
 
     @ReactMethod
+    public void checkUsagePermission(Promise promise) {
+        AppOpsManager appOps = (AppOpsManager) reactContext.getSystemService(Context.APP_OPS_SERVICE);
+        int mode = appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS,
+                android.os.Process.myUid(), reactContext.getPackageName());
+        if (mode == AppOpsManager.MODE_ALLOWED) {
+            promise.resolve(true);
+        } else {
+            promise.resolve(false);
+        }
+    }
+
+    @ReactMethod
+    public void requestUsagePermission(Promise promise) {
+        Intent intent = new Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS);
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        reactContext.startActivity(intent);
+        promise.resolve(true);
+    }
+
+    @ReactMethod
+    public void getDailyUsage(Promise promise) {
+        try {
+            UsageStatsHelper helper = new UsageStatsHelper(reactContext);
+            String json = helper.getDailyUsage();
+            promise.resolve(json);
+        } catch (Exception e) {
+            promise.reject("ERROR", e.getMessage());
+        }
+    }
+
+    @ReactMethod
+    public void getCurrentForegroundApp(Promise promise) {
+        AppBlockerAccessibilityService service = AppBlockerAccessibilityService.getInstance();
+        if (service != null) {
+            promise.resolve(service.getCurrentForegroundApp());
+        } else {
+            promise.resolve(null);
+        }
+    }
+
+    @ReactMethod
     public void logout(Promise promise) {
         SharedPreferences prefs = reactContext.getSharedPreferences("NiyantranPrefs", Context.MODE_PRIVATE);
         prefs.edit().remove("auth_token").apply();
