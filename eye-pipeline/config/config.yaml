@@ -1,6 +1,6 @@
 model:
   face_landmarker_path: "face_landmarker.task"
-  lstm_weights_path: "models/lstm.pt"
+  lstm_weights_path: "models/lstm.pth"
 
 preprocessing:
   size: "224x224"
@@ -8,15 +8,13 @@ preprocessing:
   codec: "h264"
   color: "rgb"
   use_gpu: false
-  num_frames: 64
-  frame_stride: 2
 
 emd:
   max_imf: 4
 
 inference:
   device: "cpu"
-  threshold: 0.5          # dry eye classification threshold
+  threshold: 0.5          
 
 paths:
   data_raw: "data/raw"
