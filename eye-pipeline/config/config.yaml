@@ -16,8 +16,8 @@ emd:
 
 inference:
   device: "cpu"
-  threshold: 0.5          # dry eye classification threshold
-
+  threshold: 0.5          
+  
 paths:
   data_raw: "data/raw"
   data_processed: "data/processed"
