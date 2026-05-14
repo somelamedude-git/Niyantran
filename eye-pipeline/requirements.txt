@@ -5,3 +5,7 @@ PyEMD==1.5.0
 torch==2.3.0
 pyyaml==6.0.1
 vid_prepper
+fastapi==0.111.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+hypothesis==6.100.0
